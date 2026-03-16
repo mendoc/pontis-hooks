@@ -1,0 +1,12 @@
+{
+  "name": "@pontis/webhook",
+  "version": "1.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "deploy": "sh scripts/deploy.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
