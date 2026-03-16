@@ -1,8 +1,6 @@
 services:
   webhook:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/mendoc/pontis-hooks:latest
     restart: unless-stopped
     environment:
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
