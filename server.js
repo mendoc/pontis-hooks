@@ -37,6 +37,10 @@ if (!GITHUB_TOKEN) {
 // Garde : un seul déploiement à la fois par slug
 const running = new Set();
 
+function log(slug, ...args)  { console.log(new Date().toISOString(),  `[${slug}]`, ...args); }
+function warn(slug, ...args) { console.warn(new Date().toISOString(), `[${slug}]`, ...args); }
+function err(slug, ...args)  { console.error(new Date().toISOString(),`[${slug}]`, ...args); }
+
 // Retourne le répertoire du projet pour un slug donné.
 function resolveProjectDir(slug) {
   if (!PATHS_CONFIG) return path.join(APPS_DIR, slug);
@@ -46,10 +50,10 @@ function resolveProjectDir(slug) {
     const map = JSON.parse(raw);
     const entry = map[slug];
     if (!entry) return path.join(APPS_DIR, slug);
-    console.log(`[${slug}] Répertoire personnalisé : ${entry}`);
+    log(slug, `Répertoire personnalisé : ${entry}`);
     return entry;
-  } catch (err) {
-    console.warn(`[${slug}] Impossible de lire ${PATHS_CONFIG} : ${err.message} — répertoire par défaut utilisé`);
+  } catch (e) {
+    warn(slug, `Impossible de lire ${PATHS_CONFIG} : ${e.message} — répertoire par défaut utilisé`);
     return path.join(APPS_DIR, slug);
   }
 }
@@ -69,10 +73,10 @@ function verifySignature(secret, body, sigHeader) {
 
 function runStep(cmd, args, slug) {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, (err, stdout, stderr) => {
-      if (stdout) console.log(`[${slug}]`, stdout.trim());
-      if (stderr) console.log(`[${slug}]`, stderr.trim());
-      if (err) reject(err);
+    execFile(cmd, args, (e, stdout, stderr) => {
+      if (stdout) log(slug, stdout.trim());
+      if (stderr) log(slug, stderr.trim());
+      if (e) reject(e);
       else resolve();
     });
   });
@@ -127,27 +131,27 @@ function writeComposeFile(dir, filename, content) {
   });
 }
 
-async function runDeploy(slug, fullName, branch, projectDir) {
+async function runDeploy(slug, fullName, branch, projectDir, imageTag) {
   if (running.has(slug)) {
-    console.log(`[${slug}] Déploiement déjà en cours, ignoré.`);
+    log(slug, 'Déploiement déjà en cours, ignoré.');
     return;
   }
 
   running.add(slug);
-  console.log(`[${slug}] Démarrage du déploiement (${fullName}@${branch})...`);
+  log(slug, `Démarrage du déploiement (${fullName}@${branch}) — image: ${imageTag}`);
   try {
     const { content, filename } = await fetchComposeFile(fullName, branch);
-    console.log(`[${slug}] Fichier compose récupéré : ${filename}`);
+    log(slug, `Fichier compose récupéré : ${filename}`);
     await writeComposeFile(projectDir, filename, content);
-    console.log(`[${slug}] ${filename} écrit dans ${projectDir}/`);
+    log(slug, `${filename} écrit dans ${projectDir}/`);
 
     const composeFile = path.join(projectDir, filename);
     await runStep('docker', ['compose', '-f', composeFile, 'pull'], slug);
     await runStep('docker', ['compose', '-f', composeFile, 'up', '-d'], slug);
     await runStep('docker', ['image', 'prune', '-f'], slug);
-    console.log(`[${slug}] Déploiement réussi.`);
-  } catch (err) {
-    console.error(`[${slug}] Échec du déploiement :`, err.message);
+    log(slug, `Déploiement réussi — image: ${imageTag}`);
+  } catch (e) {
+    err(slug, 'Échec du déploiement :', e.message);
   } finally {
     running.delete(slug);
   }
@@ -190,8 +194,9 @@ const server = http.createServer((req, res) => {
     res.writeHead(202).end('Accepted');
     const fullName   = payload.repository.full_name;
     const branch     = payload.repository.default_branch;
+    const imageTag   = payload.package?.package_version?.container_metadata?.tag?.name ?? 'unknown';
     const projectDir = resolveProjectDir(slug);
-    runDeploy(slug, fullName, branch, projectDir);
+    runDeploy(slug, fullName, branch, projectDir, imageTag);
   });
 });
 
