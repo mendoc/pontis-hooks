@@ -182,14 +182,14 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    if (payload.ref !== `refs/heads/${payload.repository?.default_branch}`) {
-      res.writeHead(200).end('Ignored (not default branch)');
+    if (req.headers['x-github-event'] !== 'package' || payload.action !== 'published') {
+      res.writeHead(200).end('Ignored (not a package.published event)');
       return;
     }
 
     res.writeHead(202).end('Accepted');
     const fullName   = payload.repository.full_name;
-    const branch     = payload.ref.replace('refs/heads/', '');
+    const branch     = payload.repository.default_branch;
     const projectDir = resolveProjectDir(slug);
     runDeploy(slug, fullName, branch, projectDir);
   });
